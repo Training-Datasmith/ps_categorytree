@@ -1,4 +1,6 @@
 <?php
+
+declare(strict_types=1);
 /**
  * Copyright since 2007 PrestaShop SA and Contributors
  * PrestaShop is an International Registered Trademark & Property of PrestaShop SA
@@ -34,22 +36,22 @@ class Ps_CategoryTree extends Module implements WidgetInterface
     /**
      * @var int A way to display the category tree: Home category
      */
-    const CATEGORY_ROOT_HOME = 0;
+    public const CATEGORY_ROOT_HOME = 0;
 
     /**
      * @var int A way to display the category tree: Current category
      */
-    const CATEGORY_ROOT_CURRENT = 1;
+    public const CATEGORY_ROOT_CURRENT = 1;
 
     /**
      * @var int A way to display the category tree: Parent category
      */
-    const CATEGORY_ROOT_PARENT = 2;
+    public const CATEGORY_ROOT_PARENT = 2;
 
     /**
      * @var int A way to display the category tree: Current category and its parent (if exists)
      */
-    const CATEGORY_ROOT_CURRENT_PARENT = 3;
+    public const CATEGORY_ROOT_CURRENT_PARENT = 3;
 
     public function __construct()
     {
@@ -275,15 +277,15 @@ class Ps_CategoryTree extends Module implements WidgetInterface
             case static::CATEGORY_ROOT_HOME:
                 $rootCategory = $this->getHomeCategory();
                 break;
-            // Always the current category
+                // Always the current category
             case static::CATEGORY_ROOT_CURRENT:
                 $rootCategory = $this->getCurrentCategory();
                 break;
-            // Always the parent category
+                // Always the parent category
             case static::CATEGORY_ROOT_PARENT:
                 $rootCategory = $this->tryToGetParentCategoryIfAvailable($this->getCurrentCategory());
                 break;
-            // Current category, unless it has no subcategories, in which case the parent category of the current category is used
+                // Current category, unless it has no subcategories, in which case the parent category of the current category is used
             case static::CATEGORY_ROOT_CURRENT_PARENT:
                 $rootCategory = $this->getCurrentCategory();
                 if (!$rootCategory->getSubCategories($rootCategory->id, true)) {
