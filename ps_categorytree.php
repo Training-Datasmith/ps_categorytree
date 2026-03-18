@@ -90,7 +90,7 @@ class Ps_CategoryTree extends Module implements WidgetInterface
             if ($maxDepth < 0) {
                 $output .= $this->displayError($this->trans('Maximum depth: Invalid number.', [], 'Admin.Notifications.Error'));
             } else {
-                Configuration::updateValue('BLOCK_CATEG_MAX_DEPTH', (int) $maxDepth);
+                Configuration::updateValue('BLOCK_CATEG_MAX_DEPTH', $maxDepth);
                 Configuration::updateValue('BLOCK_CATEG_SORT_WAY', Tools::getValue('BLOCK_CATEG_SORT_WAY'));
                 Configuration::updateValue('BLOCK_CATEG_SORT', Tools::getValue('BLOCK_CATEG_SORT'));
                 Configuration::updateValue('BLOCK_CATEG_ROOT_CATEGORY', Tools::getValue('BLOCK_CATEG_ROOT_CATEGORY'));
@@ -105,7 +105,7 @@ class Ps_CategoryTree extends Module implements WidgetInterface
     /**
      * Format category into an array compatible with existing templates.
      */
-    private function formatCategory($rawCategory, $idsOfCategoriesInPath): array
+    private function formatCategory(array $rawCategory, $idsOfCategoriesInPath): array
     {
         $children = [];
         if (!empty($rawCategory['children'])) {
