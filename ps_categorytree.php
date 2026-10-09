@@ -286,7 +286,7 @@ class Ps_CategoryTree extends Module implements WidgetInterface
             // Current category, unless it has no subcategories, in which case the parent category of the current category is used
             case static::CATEGORY_ROOT_CURRENT_PARENT:
                 $rootCategory = $this->getCurrentCategory();
-                if (!$rootCategory->getSubCategories($rootCategory->id, true)) {
+                if (!$rootCategory->getSubCategories($this->context->language->id, true)) {
                     $rootCategory = $this->tryToGetParentCategoryIfAvailable($rootCategory);
                 }
                 break;
@@ -351,7 +351,7 @@ class Ps_CategoryTree extends Module implements WidgetInterface
 
         // Now we have a valid parent category, let's check it. It must be active, accessible and belong to the shop.
         // Same conditions as in CategoryController. If it fails, we select the next parent.
-        if (!$parentCategory->active || !$category->checkAccess((int) $this->context->customer->id) || !$category->existsInShop($this->context->shop->id)) {
+        if (!$parentCategory->active || !$parentCategory->checkAccess((int) $this->context->customer->id) || !$parentCategory->existsInShop($this->context->shop->id)) {
             return $this->tryToGetParentCategoryIfAvailable($parentCategory);
         }
 
