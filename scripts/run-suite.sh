@@ -84,40 +84,127 @@ parse_summary() {
   grep -E '^OK \(|^FAILURES!|^ERRORS!' "$1" | tail -1 || echo "(no summary)"
 }
 
-parse_counts() {
+parse_ok_line_counts() {
   local log="$1"
-  local tests assertions failures errors
-  tests=$(grep -oP 'Tests: \K[0-9]+' "$log" | tail -1 || echo 0)
-  assertions=$(grep -oP 'Assertions: \K[0-9]+' "$log" | tail -1 || echo 0)
+  local line
+  line="$(grep -E '^OK \(' "$log" | tail -1 || true)"
+  if [[ -z "${line}" ]]; then
+    echo "0|0"
+    return
+  fi
+  local tests assertions
+  tests=$(echo "${line}" | grep -oP '^OK \(\K[0-9]+' || echo 0)
+  assertions=$(echo "${line}" | grep -oP 'tests, \K[0-9]+' || echo 0)
+  echo "${tests}|${assertions}"
+}
+
+parse_failure_counts() {
+  local log="$1"
+  local failures errors
   failures=$(grep -oP 'Failures: \K[0-9]+' "$log" | tail -1 || echo 0)
   errors=$(grep -oP 'Errors: \K[0-9]+' "$log" | tail -1 || echo 0)
-  echo "${tests}|${assertions}|${failures}|${errors}"
+  echo "${failures}|${errors}"
+}
+
+assert_revert_log() {
+  local log="$1"
+  local expected_failures="$2"
+  local label="$3"
+  if ! grep -q '^FAILURES!' "${log}"; then
+    log "Revert proof ${label}: expected FAILURES! summary in ${log}"
+    exit 1
+  fi
+  local counts failure_count error_count
+  counts="$(parse_failure_counts "${log}")"
+  IFS='|' read -r failure_count error_count <<< "${counts}"
+  if [[ "${failure_count}" != "${expected_failures}" ]]; then
+    log "Revert proof ${label}: expected ${expected_failures} failures, got ${failure_count}"
+    exit 1
+  fi
+  if [[ "${error_count}" != "0" ]]; then
+    log "Revert proof ${label}: expected 0 errors, got ${error_count}"
+    exit 1
+  fi
+}
+
+restore_module() {
+  if [[ -n "${MODULE_BACKUP:-}" && -f "${MODULE_BACKUP}" ]]; then
+    cp "${MODULE_BACKUP}" "${REPO_ROOT}/ps_categorytree.php"
+  fi
 }
 
 prove_fix_reverts() {
   local module="${REPO_ROOT}/ps_categorytree.php"
-  local backup="${TOOL_CACHE}/ps_categorytree.php.bak"
-  cp "${module}" "${backup}"
+  MODULE_BACKUP="${TOOL_CACHE}/ps_categorytree.php.bak"
+  cp "${module}" "${MODULE_BACKUP}"
+  trap restore_module EXIT
 
+  cp "${MODULE_BACKUP}" "${module}"
   sed -i 's/\$parentCategory->checkAccess/\$category->checkAccess/g' "${module}"
   sed -i 's/\$parentCategory->existsInShop/\$category->existsInShop/g' "${module}"
   set +e
   container_phpunit "${PHP_74_IMAGE}" \
     "--filter 'testParentModeSkipsParentThatDeniesAccess|testParentModeSkipsParentMissingFromShop|testParentModeKeepsParentWhenOnlyChildDeniesAccess'" \
-    "revert-parent" >/tmp/ps-categorytree-revert-parent.log 2>&1
+    "revert-parent"
   PROOF_PARENT_EXIT=$?
   set -e
-  cp "${backup}" "${module}"
+  assert_revert_log "/tmp/ps-categorytree-revert-parent.log" 3 "parent-checkAccess-existsInShop"
+  cp "${MODULE_BACKUP}" "${module}"
 
   sed -i 's/getSubCategories(\$this->context->language->id, true)/getSubCategories(\$rootCategory->id, true)/' "${module}"
   set +e
   container_phpunit "${PHP_74_IMAGE}" \
     "--filter testGetSubCategoriesReceivesLanguageIdAndActiveTrue" \
-    "revert-subcategories" >/tmp/ps-categorytree-revert-subcategories.log 2>&1
+    "revert-subcategories"
   PROOF_SUB_EXIT=$?
   set -e
-  cp "${backup}" "${module}"
-  rm -f "${backup}"
+  assert_revert_log "/tmp/ps-categorytree-revert-subcategories.log" 1 "getSubCategories-language-id"
+  cp "${MODULE_BACKUP}" "${module}"
+
+  sed -i 's/ || \$category->id == Configuration::get('\''PS_HOME_CATEGORY'\'')//' "${module}"
+  set +e
+  container_phpunit "${PHP_74_IMAGE}" \
+    "--filter testParentModeStaysWhenCategoryIsHome" \
+    "revert-home-check"
+  PROOF_HOME_EXIT=$?
+  set -e
+  assert_revert_log "/tmp/ps-categorytree-revert-home-check.log" 1 "PS_HOME_CATEGORY guard"
+  cp "${MODULE_BACKUP}" "${module}"
+
+  sed -i '/Configuration::updateValue('\''BLOCK_CATEG_SORT_WAY'\''/d' "${module}"
+  set +e
+  container_phpunit "${PHP_74_IMAGE}" \
+    "--filter testPositiveDepthSortAndRootAreSavedBeforeRedirect" \
+    "revert-config-sort-way"
+  PROOF_SORT_WAY_EXIT=$?
+  set -e
+  assert_revert_log "/tmp/ps-categorytree-revert-config-sort-way.log" 1 "BLOCK_CATEG_SORT_WAY save"
+  cp "${MODULE_BACKUP}" "${module}"
+
+  sed -i '/Configuration::updateValue('\''BLOCK_CATEG_SORT'\''/d' "${module}"
+  set +e
+  container_phpunit "${PHP_74_IMAGE}" \
+    "--filter testPositiveDepthSortAndRootAreSavedBeforeRedirect" \
+    "revert-config-sort"
+  PROOF_SORT_EXIT=$?
+  set -e
+  assert_revert_log "/tmp/ps-categorytree-revert-config-sort.log" 1 "BLOCK_CATEG_SORT save"
+  cp "${MODULE_BACKUP}" "${module}"
+
+  sed -i '/Configuration::updateValue('\''BLOCK_CATEG_ROOT_CATEGORY'\''/d' "${module}"
+  set +e
+  container_phpunit "${PHP_74_IMAGE}" \
+    "--filter testPositiveDepthSortAndRootAreSavedBeforeRedirect" \
+    "revert-config-root"
+  PROOF_ROOT_EXIT=$?
+  set -e
+  assert_revert_log "/tmp/ps-categorytree-revert-config-root.log" 1 "BLOCK_CATEG_ROOT_CATEGORY save"
+  cp "${MODULE_BACKUP}" "${module}"
+
+  trap - EXIT
+  restore_module
+  rm -f "${MODULE_BACKUP}"
+  unset MODULE_BACKUP
 }
 
 main() {
@@ -143,10 +230,12 @@ main() {
 
   prove_fix_reverts
 
-  local summary counts
+  local summary ok_counts failure_counts
   summary="$(parse_summary /tmp/ps-categorytree-74-default-1.log)"
-  counts="$(parse_counts /tmp/ps-categorytree-74-default-1.log)"
-  IFS='|' read -r test_count assertion_count failure_count error_count <<< "${counts}"
+  ok_counts="$(parse_ok_line_counts /tmp/ps-categorytree-74-default-1.log)"
+  IFS='|' read -r test_count assertion_count <<< "${ok_counts}"
+  failure_counts="$(parse_failure_counts /tmp/ps-categorytree-74-default-1.log)"
+  IFS='|' read -r failure_count error_count <<< "${failure_counts}"
 
   cat > "${ARTIFACT_FILE}" <<EOF
 # ps_categorytree suite results
@@ -175,14 +264,18 @@ main() {
 - Failures: ${failure_count}
 - Errors: ${error_count}
 
-## Production-fix revert proof (non-zero exit = tests failed as expected)
+## Production-fix revert proof (FAILURES! with expected counts, 0 errors)
 
-| Fix reverted | Exit code |
-| --- | --- |
-| Parent checkAccess/existsInShop on \$category | ${PROOF_PARENT_EXIT} |
-| getSubCategories(\$rootCategory->id) | ${PROOF_SUB_EXIT} |
+| Revert | Failures | Exit |
+| --- | --- | --- |
+| Parent checkAccess/existsInShop on \$category | 3 | ${PROOF_PARENT_EXIT} |
+| getSubCategories(\$rootCategory->id) | 1 | ${PROOF_SUB_EXIT} |
+| PS_HOME_CATEGORY guard (home test) | 1 | ${PROOF_HOME_EXIT} |
+| BLOCK_CATEG_SORT_WAY save | 1 | ${PROOF_SORT_WAY_EXIT} |
+| BLOCK_CATEG_SORT save | 1 | ${PROOF_SORT_EXIT} |
+| BLOCK_CATEG_ROOT_CATEGORY save | 1 | ${PROOF_ROOT_EXIT} |
 
-Logs: /tmp/ps-categorytree-revert-parent.log, /tmp/ps-categorytree-revert-subcategories.log
+Revert logs: /tmp/ps-categorytree-revert-*.log
 
 ## Command
 

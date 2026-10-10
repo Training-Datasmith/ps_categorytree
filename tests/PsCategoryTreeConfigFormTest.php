@@ -2,6 +2,17 @@
 
 class PsCategoryTreeConfigFormTest extends PsCategoryTreeTestCase
 {
+    /** @return array<string, mixed> */
+    private function configUpdatesByKey()
+    {
+        $byKey = [];
+        foreach (ConfigurationStore::$updateLog as $entry) {
+            $byKey[$entry[0]] = $entry[1];
+        }
+
+        return $byKey;
+    }
+
     public function testGetConfigFieldsValuesReadsStoredConfig()
     {
         ConfigurationStore::$values['BLOCK_CATEG_MAX_DEPTH'] = '4';
@@ -75,7 +86,11 @@ class PsCategoryTreeConfigFormTest extends PsCategoryTreeTestCase
         } catch (RuntimeException $e) {
             $this->assertSame('redirectAdmin', $e->getMessage());
         }
-        $this->assertSame(0, ConfigurationStore::$updateLog[0][1]);
+        $updates = $this->configUpdatesByKey();
+        $this->assertSame(0, $updates['BLOCK_CATEG_MAX_DEPTH']);
+        $this->assertEquals(0, $updates['BLOCK_CATEG_SORT_WAY']);
+        $this->assertEquals(0, $updates['BLOCK_CATEG_SORT']);
+        $this->assertEquals(0, $updates['BLOCK_CATEG_ROOT_CATEGORY']);
     }
 
     public function testPositiveDepthSortAndRootAreSavedBeforeRedirect()
@@ -93,6 +108,10 @@ class PsCategoryTreeConfigFormTest extends PsCategoryTreeTestCase
         } catch (RuntimeException $e) {
             $this->assertSame('redirectAdmin', $e->getMessage());
         }
-        $this->assertSame(3, ConfigurationStore::$updateLog[0][1]);
+        $updates = $this->configUpdatesByKey();
+        $this->assertSame(3, $updates['BLOCK_CATEG_MAX_DEPTH']);
+        $this->assertEquals(1, $updates['BLOCK_CATEG_SORT_WAY']);
+        $this->assertEquals(1, $updates['BLOCK_CATEG_SORT']);
+        $this->assertEquals(2, $updates['BLOCK_CATEG_ROOT_CATEGORY']);
     }
 }

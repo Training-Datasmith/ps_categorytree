@@ -499,7 +499,7 @@ class CategoryRegistry
                 'name' => 'Dresses', 'description' => 'Dresses desc', 'is_root_category' => false, 'active' => true,
             ],
             13 => [
-                'id' => 13, 'id_parent' => 12, 'level_depth' => 3, 'link_rewrite' => 'outer',
+                'id' => 13, 'id_parent' => 2, 'level_depth' => 3, 'link_rewrite' => 'outer',
                 'name' => 'Outer', 'description' => 'Outer desc', 'is_root_category' => false, 'active' => true,
             ],
         ];

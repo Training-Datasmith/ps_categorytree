@@ -84,8 +84,15 @@ class PsCategoryTreeWidgetRootTest extends PsCategoryTreeTestCase
     public function testParentModeStaysWhenCategoryIsHome()
     {
         ConfigurationStore::$values['BLOCK_CATEG_ROOT_CATEGORY'] = '2';
+        CategoryRegistry::$definitions[2]['is_root_category'] = false;
+        CategoryRegistry::$definitions[2]['id_parent'] = 1;
+        CategoryRegistry::$definitions[1] = [
+            'id' => 1, 'id_parent' => 10, 'level_depth' => 2, 'link_rewrite' => 'alt',
+            'name' => 'Alt', 'description' => 'Alt desc', 'is_root_category' => false, 'active' => true,
+        ];
         $this->setCategoryControllerCategory(new Category(2, 2));
         $this->assertSame(2, $this->newModule()->getWidgetVariables()['currentCategory']);
+        $this->assertNotContains([1, 2], CategoryRegistry::$constructorLog);
     }
 
     public function testParentModeReturnsHomeWhenParentNotLoaded()

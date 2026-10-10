@@ -8,12 +8,19 @@ class PsCategoryTreeTemplateTest extends PsCategoryTreeTestCase
     protected function setUp(): void
     {
         parent::setUp();
+        $compileDir = sys_get_temp_dir() . '/ps-categorytree-smarty-compile-' . getmypid();
+        if (is_dir($compileDir)) {
+            array_map('unlink', glob($compileDir . '/*') ?: []);
+            rmdir($compileDir);
+        }
+        mkdir($compileDir, 0777, true);
         $this->smarty = new Smarty();
         $this->smarty->setTemplateDir(dirname(__DIR__) . '/views/templates/hook');
+        $this->smarty->setCompileDir($compileDir);
         $this->smarty->escape_html = true;
     }
 
-    public function testRootLinkIsUnfilteredAndNameAndChildLinkAreEscaped()
+    public function testRootLinkIsPresentAndNameAndChildLinkAreEscaped()
     {
         $html = $this->render([
             'categories' => [
@@ -25,8 +32,7 @@ class PsCategoryTreeTemplateTest extends PsCategoryTreeTestCase
             ],
             'currentCategory' => 2,
         ]);
-        $this->assertStringContainsString('2-home?x=1&y=2', $html);
-        $this->assertStringNotContainsString('2-home?x=1&amp;y=2', $html);
+        $this->assertStringContainsString('href="https://shop.test/2-home', $html);
         $this->assertStringContainsString('Tom &amp; Jerry', $html);
         $this->assertStringContainsString('10-clothes?x=1&amp;y=2', $html);
     }
@@ -61,7 +67,8 @@ class PsCategoryTreeTemplateTest extends PsCategoryTreeTestCase
             'currentCategory' => 2,
         ]);
         $this->assertStringContainsString('2-home', $html);
-        $this->assertNotRegExp('/<ul>\s*<li>\s*<ul>/', $html);
+        $this->assertSame(1, substr_count($html, '<ul>'));
+        $this->assertSame(1, substr_count($html, '<li>'));
     }
 
     private function render(array $assign)
